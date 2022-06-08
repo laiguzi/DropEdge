@@ -113,7 +113,7 @@ class GCNModel(nn.Module):
     def reset_parameters(self):
         pass
 
-    def forward(self, fea, adj, sampler):
+    def forward(self, fea, adj):
 
         # input
         if self.mixmode:
