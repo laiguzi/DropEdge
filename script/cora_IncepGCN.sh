@@ -13,7 +13,7 @@ python ./src/train_new.py \
     --lr 0.01 \
     --weight_decay 0.001 \
     --early_stopping 400 \
-    --sampling_percent 0.05 \
+    --sampling_percent 0.8 \
     --dropout 0.5 \
     --normalization AugNormAdj \
      \

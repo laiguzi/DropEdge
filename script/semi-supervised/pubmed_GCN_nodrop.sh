@@ -5,7 +5,7 @@ python ./src/train_new.py \
     --datapath data// \
     --seed 42 \
     --dataset pubmed \
-    --type mutigcn \
+    --type multigcn \
     --nhiddenlayer 1 \
     --nbaseblocklayer 0 \
     --hidden 128 \
@@ -17,4 +17,4 @@ python ./src/train_new.py \
     --dropout 0.5 \
     --normalization AugRWalk --task_type semi \
     --withloop \
-    
+

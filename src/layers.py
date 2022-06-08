@@ -62,10 +62,11 @@ class GraphConvolutionBS(Module):
             self.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, input, adj):
-        support = torch.mm(input, self.weight)
-        output = torch.spmm(adj, support)
+        # output = AXW
+        support = torch.mm(input, self.weight) # X_{2708 x 1433} . W_{1433 x 128} -> {2708 x 128}
+        output = torch.spmm(adj, support) # A_{2708 x 2708} . S_{2708 x 128} -> {2708 x 128}
 
-        # Self-loop
+        # Self-loop     output = AXW + IXW'  -> node-wise: o = xW' + \sum_{y~x}yW_y
         if self.self_weight is not None:
             output = output + torch.mm(input, self.self_weight)
 
@@ -87,7 +88,7 @@ class GraphConvolutionBS(Module):
 
 class GraphBaseBlock(Module):
     """
-    The base block for Multi-layer GCN / ResGCN / Dense GCN 
+    The base block for Multi-layer GCN / ResGCN / Dense GCN
     """
 
     def __init__(self, in_features, out_features, nbaselayer,
@@ -109,7 +110,7 @@ class GraphBaseBlock(Module):
         super(GraphBaseBlock, self).__init__()
         self.in_features = in_features
         self.hiddendim = out_features
-        self.nhiddenlayer = nbaselayer
+        self.nhiddenlayer = nbaselayer # 6
         self.activation = activation
         self.aggrmethod = aggrmethod
         self.dense = dense
@@ -120,21 +121,21 @@ class GraphBaseBlock(Module):
         self.__makehidden()
 
         if self.aggrmethod == "concat" and dense == False:
-            self.out_features = in_features + out_features
+            self.out_features = in_features + out_features # 256
         elif self.aggrmethod == "concat" and dense == True:
-            self.out_features = in_features + out_features * nbaselayer
+            self.out_features = in_features + out_features * nbaselayer # 896
         elif self.aggrmethod == "add":
             if in_features != self.hiddendim:
                 raise RuntimeError("The dimension of in_features and hiddendim should be matched in add model.")
-            self.out_features = out_features
+            self.out_features = out_features # 128
         elif self.aggrmethod == "nores":
-            self.out_features = out_features
+            self.out_features = out_features # 128
         else:
             raise NotImplementedError("The aggregation method only support 'concat','add' and 'nores'.")
 
     def __makehidden(self):
         # for i in xrange(self.nhiddenlayer):
-        for i in range(self.nhiddenlayer):
+        for i in range(self.nhiddenlayer): # 6
             if i == 0:
                 layer = GraphConvolutionBS(self.in_features, self.hiddendim, self.activation, self.withbn,
                                            self.withloop)
@@ -153,17 +154,17 @@ class GraphBaseBlock(Module):
             return x
 
     def forward(self, input, adj):
-        x = input
+        x = input # 2708 x 128
         denseout = None
         # Here out is the result in all levels.
         for gc in self.hiddenlayers:
-            denseout = self._doconcat(denseout, x)
-            x = gc(x, adj)
+            denseout = self._doconcat(denseout, x) # 1: 128 2: 256 ...
+            x = gc(x, adj) # -> x: 2708 x 128
             x = F.dropout(x, self.dropout, training=self.training)
 
         if not self.dense:
             return self._doconcat(x, input)
-        return self._doconcat(x, denseout)
+        return self._doconcat(x, denseout) # -> x: 2708 x 896
 
     def get_outdim(self):
         return self.out_features
@@ -215,8 +216,8 @@ class MultiLayerGCNBlock(Module):
         return self.model.get_outdim()
 
     def __repr__(self):
-        return "%s %s (%d - [%d:%d] > %d)" % (self.__class__.__name__,
-                                              self.aggrmethod,
+        return "%s ( - [%d:%d] > %d)" % (self.__class__.__name__,
+                                              #self.aggrmethod,
                                               self.model.in_features,
                                               self.model.hiddendim,
                                               self.model.nhiddenlayer,
@@ -244,15 +245,15 @@ class ResGCNBlock(Module):
         :param dense: not applied.
         """
         super(ResGCNBlock, self).__init__()
-        self.model = GraphBaseBlock(in_features=in_features,
-                                    out_features=out_features,
-                                    nbaselayer=nbaselayer,
-                                    withbn=withbn,
-                                    withloop=withloop,
-                                    activation=activation,
-                                    dropout=dropout,
+        self.model = GraphBaseBlock(in_features=in_features, # 128
+                                    out_features=out_features, # 128
+                                    nbaselayer=nbaselayer, # 6
+                                    withbn=withbn,# False
+                                    withloop=withloop,# False
+                                    activation=activation, # x:x
+                                    dropout=dropout,# 0.5
                                     dense=False,
-                                    aggrmethod="add")
+                                    aggrmethod="add")# default
 
     def forward(self, input, adj):
         return self.model.forward(input, adj)
@@ -261,8 +262,8 @@ class ResGCNBlock(Module):
         return self.model.get_outdim()
 
     def __repr__(self):
-        return "%s %s (%d - [%d:%d] > %d)" % (self.__class__.__name__,
-                                              self.aggrmethod,
+        return "%s 'add' (%d - [%d:%d] > %d)" % (self.__class__.__name__,
+                                              #self.aggrmethod,
                                               self.model.in_features,
                                               self.model.hiddendim,
                                               self.model.nhiddenlayer,
@@ -315,7 +316,7 @@ class DenseGCNBlock(Module):
                                               self.model.out_features)
 
 
-class InecptionGCNBlock(Module):
+class InceptionGCNBlock(Module):
     """
     The multiple layer GCN with inception connection block.
     """
@@ -336,7 +337,7 @@ class InecptionGCNBlock(Module):
                            is "add", for others the default is "concat".
         :param dense: not applied. The default is False, cannot be changed.
         """
-        super(InecptionGCNBlock, self).__init__()
+        super(InceptionGCNBlock, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.hiddendim = out_features
@@ -427,6 +428,7 @@ class Dense(Module):
             self.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, input, adj):
+        # output = XW
         output = torch.mm(input, self.weight)
         if self.bias is not None:
             output = output + self.bias

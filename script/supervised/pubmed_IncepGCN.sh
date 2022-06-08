@@ -1,5 +1,8 @@
 #!/bin/bash
 
+for i in $(seq 0.05 0.05 0.95)
+do
+echo $i
 python ./src/train_new.py \
     --debug \
     --datapath data// \
@@ -13,8 +16,9 @@ python ./src/train_new.py \
     --lr 0.002 \
     --weight_decay 1e-05 \
     --early_stopping 400 \
-    --sampling_percent 0.5 \
+    --sampling_percent $i \
     --dropout 0.8 \
     --normalization BingGeNormAdj \
     --withloop \
     --withbn
+done

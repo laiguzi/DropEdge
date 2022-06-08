@@ -6,6 +6,8 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 
+from LocalRicci import compute_ricci_locally as Ricci
+
 from normalization import fetch_normalization, row_normalize
 
 datadir = "data"
@@ -32,9 +34,32 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     shape = torch.Size(sparse_mx.shape)
     return torch.sparse.FloatTensor(indices, values, shape)
 
+def load_curv(G:nx.Graph, compute_curv:bool, curv_file:str):   ### Lai
+    if compute_curv:
+        print('Computing Ricci curvature...')
+        G.remove_edges_from(nx.selfloop_edges(G))
+        rc_G = Ricci(G)
+        rc_G.compute_ricci_curvature_edges(G.edges())
+        edge_curvature = list(nx.get_edge_attributes(rc_G.G, 'ricciCurvature').items())
+        curv = sorted(edge_curvature, key=lambda x:x[1])
+        curv_list = []
+        for (x, y), cur in curv:
+            curv_list.append('%d %d %.6f'%(x, y, cur))
+        
+        with open(curv_file, 'w') as f:
+            f.write('\n'.join(curv_list))
+    else:
+        lines = open(curv_file, 'r').readlines()
+        curv = []
+        for line in lines:
+            x, y, cur = line.strip().split()
+            curv.append(((int(x),int(y)), float(cur)))
+    print('Ricci curvature loadded.')
+    return curv
 
 
-def load_citation(dataset_str="cora", normalization="AugNormAdj", porting_to_torch=True,data_path=datadir, task_type="full"):
+
+def load_citation(dataset_str="cora", normalization="AugNormAdj", porting_to_torch=True,data_path=datadir, task_type="full", compute_curv=True):
     """
     Load Citation Networks Datasets.
     """
@@ -65,7 +90,10 @@ def load_citation(dataset_str="cora", normalization="AugNormAdj", porting_to_tor
     features = sp.vstack((allx, tx)).tolil()
     features[test_idx_reorder, :] = features[test_idx_range, :]
     G = nx.from_dict_of_lists(graph)
-    adj = nx.adjacency_matrix(G)
+    #print(len([G.subgraph(c) for c in nx.connected_components(G)]))
+    curv_file = os.path.join(data_path, "curv.{}.list".format(dataset_str.lower()))
+    curv = load_curv(G, compute_curv, curv_file)
+    adj = nx.adjacency_matrix(G)  # sparse matrix (2708, 2708)
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
     # degree = np.asarray(G.degree)
     degree = np.sum(adj, axis=1)
@@ -77,13 +105,13 @@ def load_citation(dataset_str="cora", normalization="AugNormAdj", porting_to_tor
         print("Load full supervised task.")
         #supervised setting
         idx_test = test_idx_range.tolist()
-        idx_train = range(len(ally)- 500)
+        idx_train = range(len(ally)- 500)  # 1708-500
         idx_val = range(len(ally) - 500, len(ally))
     elif task_type == "semi":
         print("Load semi-supervised task.")
         #semi-supervised setting
         idx_test = test_idx_range.tolist()
-        idx_train = range(len(y))
+        idx_train = range(len(y)) # 140
         idx_val = range(len(y), len(y)+500)
     else:
         raise ValueError("Task type: %s is not supported. Available option: full and semi.")
@@ -96,13 +124,14 @@ def load_citation(dataset_str="cora", normalization="AugNormAdj", porting_to_tor
         features = torch.FloatTensor(features).float()
         labels = torch.LongTensor(labels)
         # labels = torch.max(labels, dim=1)[1]
-        adj = sparse_mx_to_torch_sparse_tensor(adj).float()
+        adj = sparse_mx_to_torch_sparse_tensor(adj).float() # torch sparse tensor
         idx_train = torch.LongTensor(idx_train)
         idx_val = torch.LongTensor(idx_val)
         idx_test = torch.LongTensor(idx_test)
         degree = torch.LongTensor(degree)
+        curv = torch.LongTensor(curv)
     learning_type = "transductive"
-    return adj, features, labels, idx_train, idx_val, idx_test, degree, learning_type
+    return adj, features, labels, idx_train, idx_val, idx_test, degree, learning_type, curv
 
 def sgc_precompute(features, adj, degree):
     #t = perf_counter()
@@ -153,7 +182,7 @@ def load_reddit_data(normalization="AugNormAdj", porting_to_torch=True, data_pat
         train_index = torch.LongTensor(train_index)
         val_index = torch.LongTensor(val_index)
         test_index = torch.LongTensor(test_index)
-    learning_type = "inductive"
+    learning_type = "inductive" 
     return adj, train_adj, features, train_features, labels, train_index, val_index, test_index, degree, learning_type
 
 
@@ -163,6 +192,11 @@ def data_loader(dataset, data_path=datadir, normalization="AugNormAdj", porting_
     if dataset == "reddit":
         return load_reddit_data(normalization, porting_to_torch, data_path)
     else:
+        curv_file = os.path.join(data_path, "curv.{}.list".format(dataset.lower()))
+        if os.path.exists(curv_file):
+            compute_curv = False
+        else:
+            compute_curv = True
         (adj,
          features,
          labels,
@@ -170,8 +204,9 @@ def data_loader(dataset, data_path=datadir, normalization="AugNormAdj", porting_
          idx_val,
          idx_test,
          degree,
-         learning_type) = load_citation(dataset, normalization, porting_to_torch, data_path, task_type)
+         learning_type,
+         curv) = load_citation(dataset, normalization, porting_to_torch, data_path, task_type, compute_curv)
         train_adj = adj
         train_features = features
-        return adj, train_adj, features, train_features, labels, idx_train, idx_val, idx_test, degree, learning_type
+        return adj, train_adj, features, train_features, labels, idx_train, idx_val, idx_test, degree, learning_type, curv
 

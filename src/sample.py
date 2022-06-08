@@ -4,6 +4,7 @@ import torch
 import scipy.sparse as sp
 from utils import data_loader, sparse_mx_to_torch_sparse_tensor
 from normalization import fetch_normalization
+import bisect
 
 class Sampler:
     """Sampling the input graph data."""
@@ -19,7 +20,8 @@ class Sampler:
          self.idx_val,
          self.idx_test, 
          self.degree,
-         self.learning_type) = data_loader(dataset, data_path, "NoNorm", False, task_type)
+         self.learning_type,
+         self.curv) = data_loader(dataset, data_path, "NoNorm", False, task_type)
         
         #convert some data to torch tensor ---- may be not the best practice here.
         self.features = torch.FloatTensor(self.features).float()
@@ -38,8 +40,8 @@ class Sampler:
         # self.pos_train_neighbor_idx = np.where
         
 
-        self.nfeat = self.features.shape[1]
-        self.nclass = int(self.labels.max().item() + 1)
+        self.nfeat = self.features.shape[1] # 1433
+        self.nclass = int(self.labels.max().item() + 1) # 7
         self.trainadj_cache = {}
         self.adj_cache = {}
         #print(type(self.train_adj))
@@ -71,7 +73,7 @@ class Sampler:
         fea = self._preprocess_fea(self.train_features, cuda)
         return r_adj, fea
 
-    def randomedge_sampler(self, percent, normalization, cuda):
+    def randomedge_sampler(self, percent, normalization, cuda):  
         """
         Randomly drop edge and preserve percent% edges.
         """
@@ -80,12 +82,67 @@ class Sampler:
             return self.stub_sampler(normalization, cuda)
         
         nnz = self.train_adj.nnz
+        # print(nnz) Cora: 10556 = 5278 * 2
         perm = np.random.permutation(nnz)
         preserve_nnz = int(nnz*percent)
         perm = perm[:preserve_nnz]
         r_adj = sp.coo_matrix((self.train_adj.data[perm],
                                (self.train_adj.row[perm],
                                 self.train_adj.col[perm])),
+                              shape=self.train_adj.shape)
+        r_adj = self._preprocess_adj(normalization, r_adj, cuda)
+        fea = self._preprocess_fea(self.train_features, cuda)
+        return r_adj, fea # r_adj may not be a symmetric matrix
+
+    def curv_sampler(self, percent, normalization, cuda):
+        if percent >= 1.0:
+            return self.stub_sampler(normalization, cuda)
+
+        curv = self.curv
+        num_edges = len(curv) # 5278
+        cur_index = np.zeros((num_edges,2))
+        cur_list = np.zeros(num_edges)
+        x_list = np.zeros(num_edges)
+        y_list = np.zeros(num_edges)
+        for idx, ((x,y),cur) in enumerate(curv):
+            cur_index[idx] = [x,y]
+            x_list[idx] = x
+            y_list[idx] = y
+            cur_list[idx] = cur
+
+        index0 = bisect.bisect(cur_list, 0)
+
+        drop_num = int(num_edges * (1 - percent))
+       
+        # print('drop_num', drop_num, 'percent', percent) # 10028  0.05
+        if drop_num > (num_edges - index0):  # if drop number > all positive curved edges, then adopt random drop
+            return self.randomedge_sampler(percent, normalization, cuda)
+        else:
+            pos_perm = np.random.permutation(num_edges - index0)
+            nonpos_ids = list(range(index0))
+            #print(nonpos_ids, pos_perm[:nnz-index0-drop_num])
+            perm = np.concatenate((nonpos_ids, pos_perm[:num_edges-index0-drop_num]))   
+            print(len(nonpos_ids), num_edges-index0-drop_num, len(perm))   
+        # preserve_nnz = int(nnz*percent)
+        # perm = perm[:preserve_nnz]
+
+        # preserve_nnz_curv = int(percent*(len(cur_list)-index0))
+        # preserve_nnz_curv = int(nnz*percent)
+        row0 = x_list[perm] # e.g. [0, 3, ...]
+        #row = np.array(row)
+        col0 = y_list[perm] # e.g. [1, 5, ...]
+        #col = np.array(col)
+        row = np.concatenate((row0, col0)) # [0, 3, ..., 1, 5, ...]
+        col = np.concatenate((col0, row0)) # [1, 5, ..., 0, 3, ...]
+        print('len(row):', len(row), len(col))
+
+        data_list = []
+        for i in range(len(col)):
+            data_list.append(1)
+
+        r_adj = sp.coo_matrix((data_list,
+                               (row,
+                                col)),
                               shape=self.train_adj.shape)
         r_adj = self._preprocess_adj(normalization, r_adj, cuda)
         fea = self._preprocess_fea(self.train_features, cuda)

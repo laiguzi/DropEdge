@@ -20,19 +20,19 @@ class GCNModel(nn.Module):
     """
 
     def __init__(self,
-                 nfeat,
-                 nhid,
-                 nclass,
-                 nhidlayer,
-                 dropout,
-                 baseblock="mutigcn",
+                 nfeat, # 1433
+                 nhid,  # 128
+                 nclass, # 7
+                 nhidlayer, # 1
+                 dropout, # 0.5
+                 baseblock="multigcn",
                  inputlayer="gcn",
                  outputlayer="gcn",
-                 nbaselayer=0,
+                 nbaselayer=0, # 6
                  activation=lambda x: x,
-                 withbn=True,
-                 withloop=True,
-                 aggrmethod="add",
+                 withbn=True,  # False
+                 withloop=True, # False
+                 aggrmethod="add", # default
                  mixmode=False):
         """
         Initial function.
@@ -41,7 +41,7 @@ class GCNModel(nn.Module):
         :param nclass: the output feature dimension.
         :param nhidlayer: the number of hidden blocks.
         :param dropout:  the dropout ratio.
-        :param baseblock: the baseblock type, can be "mutigcn", "resgcn", "densegcn" and "inceptiongcn".
+        :param baseblock: the baseblock type, can be "multigcn", "resgcn", "densegcn" and "inceptiongcn".
         :param inputlayer: the input layer type, can be "gcn", "dense", "none".
         :param outputlayer: the input layer type, can be "gcn", "dense".
         :param nbaselayer: the number of layers in one hidden block.
@@ -60,10 +60,10 @@ class GCNModel(nn.Module):
             self.BASEBLOCK = ResGCNBlock
         elif baseblock == "densegcn":
             self.BASEBLOCK = DenseGCNBlock
-        elif baseblock == "mutigcn":
+        elif baseblock == "multigcn":
             self.BASEBLOCK = MultiLayerGCNBlock
         elif baseblock == "inceptiongcn":
-            self.BASEBLOCK = InecptionGCNBlock
+            self.BASEBLOCK = InceptionGCNBlock
         else:
             raise NotImplementedError("Current baseblock %s is not supported." % (baseblock))
         if inputlayer == "gcn":
@@ -81,7 +81,7 @@ class GCNModel(nn.Module):
         if outputlayer == "gcn":
             self.outgc = GraphConvolutionBS(baseblockinput, nclass, outactivation, withbn, withloop)
         # elif outputlayer ==  "none": #here can not be none
-        #    self.outgc = lambda x: x 
+        #    self.outgc = lambda x: x
         else:
             self.outgc = Dense(nhid, nclass, activation)
 
@@ -89,16 +89,16 @@ class GCNModel(nn.Module):
         self.midlayer = nn.ModuleList()
         # Dense is not supported now.
         # for i in xrange(nhidlayer):
-        for i in range(nhidlayer):
-            gcb = self.BASEBLOCK(in_features=baseblockinput,
-                                 out_features=nhid,
-                                 nbaselayer=nbaselayer,
-                                 withbn=withbn,
-                                 withloop=withloop,
-                                 activation=activation,
-                                 dropout=dropout,
+        for i in range(nhidlayer): # 1
+            gcb = self.BASEBLOCK(in_features=baseblockinput, # 128
+                                 out_features=nhid, # 128
+                                 nbaselayer=nbaselayer, # 6
+                                 withbn=withbn, # False
+                                 withloop=withloop, # False
+                                 activation=activation, # x:x
+                                 dropout=dropout, # 0.5
                                  dense=False,
-                                 aggrmethod=aggrmethod)
+                                 aggrmethod=aggrmethod) # concat
             self.midlayer.append(gcb)
             baseblockinput = gcb.get_outdim()
         # output gc
@@ -113,7 +113,10 @@ class GCNModel(nn.Module):
     def reset_parameters(self):
         pass
 
-    def forward(self, fea, adj):
+    def forward(self, fea, adj, sampler):
+        # 
+        
+
         # input
         if self.mixmode:
             x = self.ingc(fea, adj.cpu())
@@ -123,14 +126,15 @@ class GCNModel(nn.Module):
         x = F.dropout(x, self.dropout, training=self.training)
         if self.mixmode:
             x = x.to(device)
+        # x: 2708 x 128
 
         # mid block connections
         # for i in xrange(len(self.midlayer)):
-        for i in range(len(self.midlayer)):
+        for i in range(len(self.midlayer)): # 1
             midgc = self.midlayer[i]
-            x = midgc(x, adj)
+            x = midgc(x, adj) # -> x: 2708 x 896
         # output, no relu and dropput here.
-        x = self.outgc(x, adj)
+        x = self.outgc(x, adj) # -> x: 2708 x 7
         x = F.log_softmax(x, dim=1)
         return x
 

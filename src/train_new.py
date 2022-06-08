@@ -1,6 +1,9 @@
 from __future__ import division
 from __future__ import print_function
 
+import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
 import time
 import argparse
 import numpy as np
@@ -9,6 +12,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from tensorboardX import SummaryWriter
+from torchsummary import summary
 
 from earlystopping import EarlyStopping
 from sample import Sampler
@@ -24,7 +28,7 @@ from sample import Sampler
 
 # Training settings
 parser = argparse.ArgumentParser()
-# Training parameter 
+# Training parameter
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='Disables CUDA training.')
 parser.add_argument('--fastmode', action='store_true', default=False,
@@ -52,7 +56,7 @@ parser.add_argument("--no_tensorboard", default=False, help="Disable writing log
 
 # Model parameter
 parser.add_argument('--type',
-                    help="Choose the model to be trained.(mutigcn, resgcn, densegcn, inceptiongcn)")
+                    help="Choose the model to be trained.(multigcn, resgcn, densegcn, inceptiongcn)")
 parser.add_argument('--inputlayer', default='gcn',
                     help="The input layer of the model.")
 parser.add_argument('--outputlayer', default='gcn',
@@ -71,7 +75,7 @@ parser.add_argument("--normalization", default="AugNormAdj",
                     help="The normalization on the adj matrix.")
 parser.add_argument("--sampling_percent", type=float, default=1.0,
                     help="The percent of the preserve edges. If it equals 1, no sampling is done on adj matrix.")
-# parser.add_argument("--baseblock", default="res", help="The base building block (resgcn, densegcn, mutigcn, inceptiongcn).")
+# parser.add_argument("--baseblock", default="res", help="The base building block (resgcn, densegcn, multigcn, inceptiongcn).")
 parser.add_argument("--nbaseblocklayer", type=int, default=1,
                     help="The number of layers in each baseblock")
 parser.add_argument("--aggrmethod", default="default",
@@ -92,7 +96,7 @@ if args.aggrmethod == "default":
 if args.fastmode and args.early_stopping > 0:
     args.early_stopping = 0
     print("In the fast mode, early_stopping is not valid option. Setting early_stopping = 0.")
-if args.type == "mutigcn":
+if args.type == "multigcn":
     print("For the multi-layer gcn model, the aggrmethod is fixed to nores and nhiddenlayers = 1.")
     args.nhiddenlayer = 1
     args.aggrmethod = "nores"
@@ -128,6 +132,8 @@ model = GCNModel(nfeat=nfeat,
                  aggrmethod=args.aggrmethod,
                  mixmode=args.mixmode)
 
+print(model)
+
 optimizer = optim.Adam(model.parameters(),
                        lr=args.lr, weight_decay=args.weight_decay)
 
@@ -137,7 +143,7 @@ scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[200, 300, 400,
 if args.cuda:
     model.cuda()
 
-# For the mix mode, lables and indexes are in cuda. 
+# For the mix mode, lables and indexes are in cuda.
 if args.cuda or args.mixmode:
     labels = labels.cuda()
     idx_train = idx_train.cuda()
@@ -165,7 +171,7 @@ def get_lr(optimizer):
 
 
 # define the training function.
-def train(epoch, train_adj, train_fea, idx_train, val_adj=None, val_fea=None):
+def train(epoch, train_adj, train_fea, sampler, idx_train, val_adj=None, val_fea=None):
     if val_adj is None:
         val_adj = train_adj
         val_fea = train_fea
@@ -173,7 +179,7 @@ def train(epoch, train_adj, train_fea, idx_train, val_adj=None, val_fea=None):
     t = time.time()
     model.train()
     optimizer.zero_grad()
-    output = model(train_fea, train_adj)
+    output = model(train_fea, train_adj, sampler)
     # special for reddit
     if sampler.learning_type == "inductive":
         loss_train = F.nll_loss(output, labels[idx_train])
@@ -242,13 +248,13 @@ for epoch in range(args.epochs):
     sampling_t = time.time()
     # no sampling
     # randomedge sampling if args.sampling_percent >= 1.0, it behaves the same as stub_sampler.
-    (train_adj, train_fea) = sampler.randomedge_sampler(percent=args.sampling_percent, normalization=args.normalization,
+    (train_adj, train_fea) = sampler.curv_sampler(percent=1.0, normalization=args.normalization,
                                                         cuda=args.cuda)
     if args.mixmode:
         train_adj = train_adj.cuda()
 
     sampling_t = time.time() - sampling_t
-    
+
     # The validation set is controlled by idx_val
     # if sampler.learning_type == "transductive":
     if False:
@@ -257,7 +263,7 @@ for epoch in range(args.epochs):
         (val_adj, val_fea) = sampler.get_test_set(normalization=args.normalization, cuda=args.cuda)
         if args.mixmode:
             val_adj = val_adj.cuda()
-        outputs = train(epoch, train_adj, train_fea, input_idx_train, val_adj, val_fea)
+        outputs = train(epoch, train_adj, train_fea, sampler, input_idx_train, val_adj, val_fea)
 
     if args.debug and epoch % 1 == 0:
         print('Epoch: {:04d}'.format(epoch + 1),
@@ -269,13 +275,13 @@ for epoch in range(args.epochs):
               's_time: {:.4f}s'.format(sampling_t),
               't_time: {:.4f}s'.format(outputs[5]),
               'v_time: {:.4f}s'.format(outputs[6]))
-    
+
     if args.no_tensorboard is False:
         tb_writer.add_scalars('Loss', {'train': outputs[0], 'val': outputs[2]}, epoch)
         tb_writer.add_scalars('Accuracy', {'train': outputs[1], 'val': outputs[3]}, epoch)
         tb_writer.add_scalar('lr', outputs[4], epoch)
         tb_writer.add_scalars('Time', {'train': outputs[5], 'val': outputs[6]}, epoch)
-        
+
 
     loss_train[epoch], acc_train[epoch], loss_val[epoch], acc_val[epoch] = outputs[0], outputs[1], outputs[2], outputs[
         3]
@@ -299,3 +305,5 @@ if args.mixmode:
 (loss_test, acc_test) = test(test_adj, test_fea)
 print("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f" % (
 loss_train[-1], loss_val[-1], loss_test, acc_train[-1], acc_val[-1], acc_test))
+with open('%s_result.txt'%(args.type), 'a') as f:
+    f.write('%.2f %.6f\n'%(args.sampling_percent, acc_test))

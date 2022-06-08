@@ -5,7 +5,7 @@ python ./src/train_new.py \
     --datapath data// \
     --seed 42 \
     --dataset citeseer \
-    --type mutigcn \
+    --type multigcn \
     --nhiddenlayer 1 \
     --nbaseblocklayer 2 \
     --hidden 128 \
