@@ -171,7 +171,7 @@ def get_lr(optimizer):
 
 
 # define the training function.
-def train(epoch, train_adj, train_fea, sampler, idx_train, val_adj=None, val_fea=None):
+def train(epoch, train_adj, train_fea, idx_train, val_adj=None, val_fea=None):
     if val_adj is None:
         val_adj = train_adj
         val_fea = train_fea
@@ -179,7 +179,7 @@ def train(epoch, train_adj, train_fea, sampler, idx_train, val_adj=None, val_fea
     t = time.time()
     model.train()
     optimizer.zero_grad()
-    output = model(train_fea, train_adj, sampler)
+    output = model(train_fea, train_adj)
     # special for reddit
     if sampler.learning_type == "inductive":
         loss_train = F.nll_loss(output, labels[idx_train])
@@ -263,7 +263,7 @@ for epoch in range(args.epochs):
         (val_adj, val_fea) = sampler.get_test_set(normalization=args.normalization, cuda=args.cuda)
         if args.mixmode:
             val_adj = val_adj.cuda()
-        outputs = train(epoch, train_adj, train_fea, sampler, input_idx_train, val_adj, val_fea)
+        outputs = train(epoch, train_adj, train_fea, input_idx_train, val_adj, val_fea)
 
     if args.debug and epoch % 1 == 0:
         print('Epoch: {:04d}'.format(epoch + 1),

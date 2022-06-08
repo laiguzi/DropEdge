@@ -114,8 +114,6 @@ class GCNModel(nn.Module):
         pass
 
     def forward(self, fea, adj, sampler):
-        # 
-        
 
         # input
         if self.mixmode:
