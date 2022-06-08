@@ -33,7 +33,11 @@ class GCNModel(nn.Module):
                  withbn=True,  # False
                  withloop=True, # False
                  aggrmethod="add", # default
-                 mixmode=False):
+                 mixmode=False,
+                 sampler=None,
+                 percent=None,
+                 normalization=None,
+                 cuda=False):
         """
         Initial function.
         :param nfeat: the input feature dimension.
@@ -55,6 +59,9 @@ class GCNModel(nn.Module):
         super(GCNModel, self).__init__()
         self.mixmode = mixmode
         self.dropout = dropout
+        self.percent = percent
+        self.normalization = normalization
+        self.cuda = cuda
 
         if baseblock == "resgcn":
             self.BASEBLOCK = ResGCNBlock
@@ -110,16 +117,21 @@ class GCNModel(nn.Module):
             self.midlayer = self.midlayer.to(device)
             self.outgc = self.outgc.to(device)
 
+        if sampler:
+            self.sampler = sampler
+
     def reset_parameters(self):
         pass
 
     def forward(self, fea, adj):
 
+        adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
+
         # input
         if self.mixmode:
-            x = self.ingc(fea, adj.cpu())
+            x = self.ingc(fea, adj0.cpu())
         else:
-            x = self.ingc(fea, adj)
+            x = self.ingc(fea, adj0)
 
         x = F.dropout(x, self.dropout, training=self.training)
         if self.mixmode:
@@ -130,9 +142,11 @@ class GCNModel(nn.Module):
         # for i in xrange(len(self.midlayer)):
         for i in range(len(self.midlayer)): # 1
             midgc = self.midlayer[i]
-            x = midgc(x, adj) # -> x: 2708 x 896
+            adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
+            x = midgc(x, adj0) # -> x: 2708 x 896
         # output, no relu and dropput here.
-        x = self.outgc(x, adj) # -> x: 2708 x 7
+        adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
+        x = self.outgc(x, adj0) # -> x: 2708 x 7
         x = F.log_softmax(x, dim=1)
         return x
 

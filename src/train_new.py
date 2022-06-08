@@ -130,7 +130,11 @@ model = GCNModel(nfeat=nfeat,
                  withbn=args.withbn,
                  withloop=args.withloop,
                  aggrmethod=args.aggrmethod,
-                 mixmode=args.mixmode)
+                 mixmode=args.mixmode,
+                 sampler=sampler,
+                 percent=args.sampling_percent,
+                 normalization=args.normalization,
+                 cuda=args.cuda)
 
 print(model)
 
