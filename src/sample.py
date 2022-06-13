@@ -121,8 +121,7 @@ class Sampler:
             pos_perm = np.random.permutation(num_edges - index0)
             nonpos_ids = list(range(index0))
             #print(nonpos_ids, pos_perm[:nnz-index0-drop_num])
-            perm = np.concatenate((nonpos_ids, pos_perm[:num_edges-index0-drop_num]))   
-            print(len(nonpos_ids), num_edges-index0-drop_num, len(perm))   
+            perm = np.concatenate((nonpos_ids, pos_perm[:num_edges-index0-drop_num]))    
         # preserve_nnz = int(nnz*percent)
         # perm = perm[:preserve_nnz]
 
@@ -134,7 +133,6 @@ class Sampler:
         #col = np.array(col)
         row = np.concatenate((row0, col0)) # [0, 3, ..., 1, 5, ...]
         col = np.concatenate((col0, row0)) # [1, 5, ..., 0, 3, ...]
-        print('len(row):', len(row), len(col))
 
         data_list = []
         for i in range(len(col)):

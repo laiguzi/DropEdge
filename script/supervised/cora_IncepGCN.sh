@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for i in $(seq 0.05 0.05 0.05)
+for i in $(seq 0.05 0.05 1.0)
 do
 echo $i
 python ./src/train_new.py \

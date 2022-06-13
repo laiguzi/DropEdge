@@ -125,13 +125,13 @@ class GCNModel(nn.Module):
 
     def forward(self, fea, adj):
 
-        adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
+        #adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
 
         # input
         if self.mixmode:
-            x = self.ingc(fea, adj0.cpu())
+            x = self.ingc(fea, adj.cpu())
         else:
-            x = self.ingc(fea, adj0)
+            x = self.ingc(fea, adj)
 
         x = F.dropout(x, self.dropout, training=self.training)
         if self.mixmode:
@@ -145,8 +145,8 @@ class GCNModel(nn.Module):
             adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
             x = midgc(x, adj0) # -> x: 2708 x 896
         # output, no relu and dropput here.
-        adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
-        x = self.outgc(x, adj0) # -> x: 2708 x 7
+        #adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
+        x = self.outgc(x, adj) # -> x: 2708 x 7
         x = F.log_softmax(x, dim=1)
         return x
 

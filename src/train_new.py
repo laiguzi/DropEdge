@@ -102,10 +102,10 @@ if args.type == "multigcn":
     args.aggrmethod = "nores"
 
 # random seed setting
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-if args.cuda or args.mixmode:
-    torch.cuda.manual_seed(args.seed)
+# np.random.seed(args.seed)
+# torch.manual_seed(args.seed)
+# if args.cuda or args.mixmode:
+#     torch.cuda.manual_seed(args.seed)
 
 # should we need fix random seed here?
 sampler = Sampler(args.dataset, args.datapath, args.task_type)
