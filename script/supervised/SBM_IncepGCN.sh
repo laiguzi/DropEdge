@@ -1,16 +1,16 @@
 #!/bin/bash
 
-for i in $(seq 0.05 0.05 1)
+for i in $(seq 0.05 0.05 0.05)
 do
 echo $i
 python ./src/train_new.py \
     --debug \
     --datapath data// \
     --seed 42 \
-    --dataset cora \
+    --dataset SBM \
     --type inceptiongcn \
     --nhiddenlayer 1 \
-    --nbaseblocklayer 6 \
+    --nbaseblocklayer 0 \
     --hidden 128 \
     --epoch 400 \
     --lr 0.01 \

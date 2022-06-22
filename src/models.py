@@ -37,7 +37,7 @@ class GCNModel(nn.Module):
                  sampler=None,
                  percent=None,
                  normalization=None,
-                 cuda=False):
+                 use_cuda=False):
         """
         Initial function.
         :param nfeat: the input feature dimension.
@@ -61,7 +61,7 @@ class GCNModel(nn.Module):
         self.dropout = dropout
         self.percent = percent
         self.normalization = normalization
-        self.cuda = cuda
+        self.use_cuda = use_cuda
 
         if baseblock == "resgcn":
             self.BASEBLOCK = ResGCNBlock
@@ -125,7 +125,7 @@ class GCNModel(nn.Module):
 
     def forward(self, fea, adj):
 
-        #adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
+        #adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.use_cuda)
 
         # input
         if self.mixmode:
@@ -142,10 +142,10 @@ class GCNModel(nn.Module):
         # for i in xrange(len(self.midlayer)):
         for i in range(len(self.midlayer)): # 1
             midgc = self.midlayer[i]
-            adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
-            x = midgc(x, adj0) # -> x: 2708 x 896
+            #adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.use_cuda)
+            x = midgc(x, adj) # -> x: 2708 x 896
         # output, no relu and dropput here.
-        #adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.cuda)
+        #adj0, _ = self.sampler.curv_sampler(self.percent, self.normalization, self.use_cuda)
         x = self.outgc(x, adj) # -> x: 2708 x 7
         x = F.log_softmax(x, dim=1)
         return x

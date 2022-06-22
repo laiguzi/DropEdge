@@ -46,8 +46,9 @@ def load_curv(G:nx.Graph, compute_curv:bool, curv_file:str):   ### Lai
         for (x, y), cur in curv:
             curv_list.append('%d %d %.6f'%(x, y, cur))
         
-        with open(curv_file, 'w') as f:
-            f.write('\n'.join(curv_list))
+        if curv_file is not None:
+            with open(curv_file, 'w') as f:
+                f.write('\n'.join(curv_list))
     else:
         lines = open(curv_file, 'r').readlines()
         curv = []
@@ -186,11 +187,67 @@ def load_reddit_data(normalization="AugNormAdj", porting_to_torch=True, data_pat
     return adj, train_adj, features, train_features, labels, train_index, val_index, test_index, degree, learning_type
 
 
+def load_SBM(normalization, porting_to_torch, data_path, data_param):
+    sizes, probs = data_param
+    G = nx.stochastic_block_model(sizes, probs)
+    n = G.number_of_nodes()
+    m = G.number_of_edges()
+    feature_dim = 100
+    features = torch.tensor(np.random.rand(n,feature_dim),dtype=torch.float)
+    blocks = nx.get_node_attributes(G, 'block')
+    labels = torch.tensor(list(blocks.values()))
+    #curv_file = os.path.join(data_path, "curv.{}.list".format(dataset.lower()))
+    curv = load_curv(G, True, None)
+    adj = nx.adjacency_matrix(G)  # sparse matrix (2708, 2708)
+    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    adj, features = preprocess_citation(adj, features, normalization)
+    # degree = np.asarray(G.degree)
+    degree = np.sum(adj, axis=1)
+    idx_train = []
+    idx_val = []
+    idx_test = []
+    start= 0 
+    for idx, i in enumerate(sizes): # train : val : test = 4: 4: 2
+        train_end = start + int(i * 0.4)
+        idx_train.extend(list(range(start, train_end)))
+        val_end = start + int(i * 0.8)
+        idx_val.extend(list(range(train_end, val_end)))
+        idx_test.extend(list(range(val_end, start + i)))
+        start += i
+        
+    # porting to pytorch
+    if porting_to_torch:
+        features = torch.FloatTensor(features).float()
+        labels = torch.LongTensor(labels)
+        # labels = torch.max(labels, dim=1)[1]
+        adj = sparse_mx_to_torch_sparse_tensor(adj).float() # torch sparse tensor
+        idx_train = torch.LongTensor(idx_train)
+        idx_val = torch.LongTensor(idx_val)
+        idx_test = torch.LongTensor(idx_test)
+        degree = torch.LongTensor(degree)
+        curv = torch.LongTensor(curv)
+    learning_type = "transductive"
+    return adj, features, labels, idx_train, idx_val, idx_test, degree, learning_type, curv
+    
 
     
-def data_loader(dataset, data_path=datadir, normalization="AugNormAdj", porting_to_torch=True, task_type = "full"):
+def data_loader(dataset, data_path=datadir, normalization="AugNormAdj", porting_to_torch=True, task_type = "full", data_param=None):
     if dataset == "reddit":
         return load_reddit_data(normalization, porting_to_torch, data_path)
+    elif dataset == "SBM":
+        (adj,
+         features,
+         labels,
+         idx_train,
+         idx_val,
+         idx_test,
+         degree,
+         learning_type,
+         curv) = load_SBM(normalization, porting_to_torch, data_path, data_param)
+        train_adj = adj
+        train_features = features
+        return adj, train_adj, features, train_features, labels, idx_train, idx_val, idx_test, degree, learning_type, curv
+
     else:
         curv_file = os.path.join(data_path, "curv.{}.list".format(dataset.lower()))
         if os.path.exists(curv_file):

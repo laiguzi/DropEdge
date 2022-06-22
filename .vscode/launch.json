@@ -1,0 +1,31 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["--debug",
+                "--datapath", "data",
+                "--seed", "42",
+                "--dataset", "cora",
+                "--type", "resgcn",
+                "--nhiddenlayer", "1",
+                "--nbaseblocklayer", "2",
+                "--hidden", "128",
+                "--epoch", "400",
+                "--lr", "0.01",
+                "--weight_decay", "0.001",
+                "--early_stopping", "400",
+                "--sampling_percent", "0.95",
+                "--dropout", "0.5",
+                "--normalization", "FirstOrderGCN"]
+        }
+    ]
+}

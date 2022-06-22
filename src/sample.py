@@ -8,7 +8,7 @@ import bisect
 
 class Sampler:
     """Sampling the input graph data."""
-    def __init__(self, dataset, data_path="data", task_type="full"):
+    def __init__(self, dataset, data_path="data", task_type="full", data_param=None):
         self.dataset = dataset
         self.data_path = data_path
         (self.adj,
@@ -21,7 +21,7 @@ class Sampler:
          self.idx_test, 
          self.degree,
          self.learning_type,
-         self.curv) = data_loader(dataset, data_path, "NoNorm", False, task_type)
+         self.curv) = data_loader(dataset, data_path, "NoNorm", False, task_type, data_param=data_param)
         
         #convert some data to torch tensor ---- may be not the best practice here.
         self.features = torch.FloatTensor(self.features).float()
@@ -120,17 +120,10 @@ class Sampler:
         else:
             pos_perm = np.random.permutation(num_edges - index0)
             nonpos_ids = list(range(index0))
-            #print(nonpos_ids, pos_perm[:nnz-index0-drop_num])
-            perm = np.concatenate((nonpos_ids, pos_perm[:num_edges-index0-drop_num]))    
-        # preserve_nnz = int(nnz*percent)
-        # perm = perm[:preserve_nnz]
+            perm = np.concatenate((nonpos_ids, pos_perm[:num_edges-index0-drop_num]))     
 
-        # preserve_nnz_curv = int(percent*(len(cur_list)-index0))
-        # preserve_nnz_curv = int(nnz*percent)
         row0 = x_list[perm] # e.g. [0, 3, ...]
-        #row = np.array(row)
         col0 = y_list[perm] # e.g. [1, 5, ...]
-        #col = np.array(col)
         row = np.concatenate((row0, col0)) # [0, 3, ..., 1, 5, ...]
         col = np.concatenate((col0, row0)) # [1, 5, ..., 0, 3, ...]
 

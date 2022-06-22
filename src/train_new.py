@@ -50,6 +50,7 @@ parser.add_argument('--debug', action='store_true',
                     default=False, help="Enable the detialed training output.")
 parser.add_argument('--dataset', default="cora", help="The data set")
 parser.add_argument('--datapath', default="data/", help="The data path.")
+parser.add_argument('--data_param', default=None, help='The params for SBM. e.g., ([50, 50], [[0.5, 0.05], [0.05, 0.5]])')
 parser.add_argument("--early_stopping", type=int,
                     default=0, help="The patience of earlystopping. Do not adopt the earlystopping when it equals 0.")
 parser.add_argument("--no_tensorboard", default=False, help="Disable writing logs to tensorboard")
@@ -108,7 +109,11 @@ if args.type == "multigcn":
 #     torch.cuda.manual_seed(args.seed)
 
 # should we need fix random seed here?
-sampler = Sampler(args.dataset, args.datapath, args.task_type)
+if args.dataset == "SBM":
+    data_param = ([20, 20], [[0.05, 0.005], [0.005, 0.05]])
+else: 
+    data_param = None
+sampler = Sampler(args.dataset, args.datapath, args.task_type, data_param)
 
 # get labels and indexes
 labels, idx_train, idx_val, idx_test = sampler.get_label_and_idxes(args.cuda)
@@ -134,7 +139,7 @@ model = GCNModel(nfeat=nfeat,
                  sampler=sampler,
                  percent=args.sampling_percent,
                  normalization=args.normalization,
-                 cuda=args.cuda)
+                 use_cuda=args.cuda)
 
 print(model)
 
@@ -252,7 +257,7 @@ for epoch in range(args.epochs):
     sampling_t = time.time()
     # no sampling
     # randomedge sampling if args.sampling_percent >= 1.0, it behaves the same as stub_sampler.
-    (train_adj, train_fea) = sampler.curv_sampler(percent=args.sampling_percent, normalization=args.normalization,
+    (train_adj, train_fea) = sampler.randomedge_sampler(percent=args.sampling_percent, normalization=args.normalization,
                                                         cuda=args.cuda)
     if args.mixmode:
         train_adj = train_adj.cuda()
@@ -311,3 +316,4 @@ print("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f" % (
 loss_train[-1], loss_val[-1], loss_test, acc_train[-1], acc_val[-1], acc_test))
 with open('%s_result.txt'%(args.type), 'a') as f:
     f.write('%.2f %.6f\n'%(args.sampling_percent, acc_test))
+
