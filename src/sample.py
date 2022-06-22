@@ -8,7 +8,7 @@ import bisect
 
 class Sampler:
     """Sampling the input graph data."""
-    def __init__(self, dataset, data_path="data", task_type="full", data_param=None):
+    def __init__(self, dataset, data_path="data", task_type="full", data_param=None, save=False):
         self.dataset = dataset
         self.data_path = data_path
         (self.adj,
@@ -21,7 +21,7 @@ class Sampler:
          self.idx_test, 
          self.degree,
          self.learning_type,
-         self.curv) = data_loader(dataset, data_path, "NoNorm", False, task_type, data_param=data_param)
+         self.curv) = data_loader(dataset, data_path, "NoNorm", False, task_type, data_param=data_param, save=save)
         
         #convert some data to torch tensor ---- may be not the best practice here.
         self.features = torch.FloatTensor(self.features).float()

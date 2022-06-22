@@ -187,17 +187,44 @@ def load_reddit_data(normalization="AugNormAdj", porting_to_torch=True, data_pat
     return adj, train_adj, features, train_features, labels, train_index, val_index, test_index, degree, learning_type
 
 
-def load_SBM(normalization, porting_to_torch, data_path, data_param):
+def SBM_generator(sizes, probs, file_dir=None):
+    if not os.path.exists(file_dir):
+        G = nx.stochastic_block_model(sizes, probs)
+    else:
+        G = nx.read_gexf(file_dir)
+    #print(torch.tensor(list(blocks.values())))
+    #print(nx.adjacency_matrix(G))
+    return G
+
+
+def check_dir(file_dir):
+    if not os.path.exists(os.path.dirname(file_dir)):
+        os.makedirs(os.path.dirname(file_dir))
+    #nx.write_gexf(G, file_dir)
+
+
+def SBM_dir(sizes, probs, basename='origin'):
+    n_block = len(sizes)
+    n_node_each_block = sizes[0]
+    p_intra = probs[0][0]
+    p_inter = probs[0][1]
+    return os.path.join('../SBM_data/', '{:d}_{:d}_{:.2f}_{:.3f}/{}.gexf'.format(n_block, n_node_each_block, p_intra, p_inter, basename))
+
+
+def load_SBM(normalization, porting_to_torch, data_path, data_param, save=False):
     sizes, probs = data_param
-    G = nx.stochastic_block_model(sizes, probs)
+    file_dir = SBM_dir(sizes, probs)
+    G = SBM_generator(sizes, probs, file_dir)
     n = G.number_of_nodes()
     m = G.number_of_edges()
     feature_dim = 100
     features = torch.tensor(np.random.rand(n,feature_dim),dtype=torch.float)
     blocks = nx.get_node_attributes(G, 'block')
     labels = torch.tensor(list(blocks.values()))
-    #curv_file = os.path.join(data_path, "curv.{}.list".format(dataset.lower()))
     curv = load_curv(G, True, None)
+    if save:
+        check_dir(file_dir)
+        nx.write_gexf(G, file_dir)
     adj = nx.adjacency_matrix(G)  # sparse matrix (2708, 2708)
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
     adj, features = preprocess_citation(adj, features, normalization)
@@ -231,7 +258,7 @@ def load_SBM(normalization, porting_to_torch, data_path, data_param):
     
 
     
-def data_loader(dataset, data_path=datadir, normalization="AugNormAdj", porting_to_torch=True, task_type = "full", data_param=None):
+def data_loader(dataset, data_path=datadir, normalization="AugNormAdj", porting_to_torch=True, task_type = "full", data_param=None, save=False):
     if dataset == "reddit":
         return load_reddit_data(normalization, porting_to_torch, data_path)
     elif dataset == "SBM":
@@ -243,7 +270,7 @@ def data_loader(dataset, data_path=datadir, normalization="AugNormAdj", porting_
          idx_test,
          degree,
          learning_type,
-         curv) = load_SBM(normalization, porting_to_torch, data_path, data_param)
+         curv) = load_SBM(normalization, porting_to_torch, data_path, data_param, save)
         train_adj = adj
         train_features = features
         return adj, train_adj, features, train_features, labels, idx_train, idx_val, idx_test, degree, learning_type, curv
