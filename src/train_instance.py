@@ -2,13 +2,17 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+
+from sklearn import datasets
 os.environ['CUDA_LAUNCH)BLOCKING'] = '1'
 
 import time
 import argparse
 import numpy as np
+import scipy.sparse as sp
+import networkx as nx
 
-import torch_tb_profiler
+import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
@@ -17,11 +21,11 @@ from tensorboardX import SummaryWriter
 from earlystopping import EarlyStopping
 from sample import Sampler
 from metric import accuracy, roc_auc_compute_fn
+from utils import SBM_dir
+from models import *
 
 parser = argparse.ArgumentParser()
 # Training params
-parser.add_argument('--no_cuda')
-
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='Disables CUDA training.')
 parser.add_argument('--fastmode', action='store_true', default=False,
@@ -96,7 +100,7 @@ if args.type == "multigcn":
     args.aggrmethod = "nores"
 
 if args.dataset == "SBM":
-    data_param = ([20, 20], [[0.05, 0.005], [0.005, 0.05]])
+    data_param = ([20, 20], [[0.5, 0.005], [0.005, 0.5]])
 else: 
     data_param = None
 sampler = Sampler(args.dataset, args.datapath, args.task_type, data_param, save=True)
@@ -227,6 +231,15 @@ def test(test_adj, test_fea):
         print("accuracy=%.5f" % (acc_test.item()))
     return (loss_test.item(), acc_test.item())
 
+def case_study(file_dir):
+    model.eval()
+    output = model(test_fea, test_adj)
+    print(labels, idx_train, idx_val, idx_test)
+    adj = sp.coo_matrix(train_adj.to_dense().numpy())
+    G = nx.from_scipy_sparse_matrix(adj)
+    nx.write_gexf(G, file_dir)
+    return G
+
 
 # Train model
 t_total = time.time()
@@ -236,14 +249,13 @@ loss_val = np.zeros((args.epochs,))
 acc_val = np.zeros((args.epochs,))
 
 sampling_t = 0
-
+# (train_adj, train_fea) = sampler.curv_sampler(percent=args.sampling_percent, normalization=args.normalization, cuda=args.cuda)
 for epoch in range(args.epochs):
     input_idx_train = idx_train
     sampling_t = time.time()
     # no sampling
     # randomedge sampling if args.sampling_percent >= 1.0, it behaves the same as stub_sampler.
-    (train_adj, train_fea) = sampler.randomedge_sampler(percent=args.sampling_percent, normalization=args.normalization,
-                                                        cuda=args.cuda)
+    (train_adj, train_fea) = sampler.curv_sampler(percent=args.sampling_percent, normalization=args.normalization, cuda=args.cuda)
     if args.mixmode:
         train_adj = train_adj.cuda()
 
@@ -277,8 +289,7 @@ for epoch in range(args.epochs):
         tb_writer.add_scalars('Time', {'train': outputs[5], 'val': outputs[6]}, epoch)
 
 
-    loss_train[epoch], acc_train[epoch], loss_val[epoch], acc_val[epoch] = outputs[0], outputs[1], outputs[2], outputs[
-        3]
+    loss_train[epoch], acc_train[epoch], loss_val[epoch], acc_val[epoch] = outputs[0], outputs[1], outputs[2], outputs[3]
 
     if args.early_stopping > 0 and early_stopping.early_stop:
         print("Early stopping.")
@@ -297,6 +308,12 @@ if args.debug:
 if args.mixmode:
     test_adj = test_adj.cuda()
 (loss_test, acc_test) = test(test_adj, test_fea)
+assert np.allclose(test_fea.numpy(),train_fea.numpy()), "test_fea and train_fea are not equal."
+
+if args.dataset == 'SBM':
+    sizes, probs = data_param
+    file_dir = SBM_dir(sizes, probs, '{:.2f}_{:.4f}'.format(args.sampling_percent, acc_test))
+    G = case_study(file_dir)
 print("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f" % (
 loss_train[-1], loss_val[-1], loss_test, acc_train[-1], acc_val[-1], acc_test))
 with open('%s_result.txt'%(args.type), 'a') as f:

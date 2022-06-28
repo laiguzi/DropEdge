@@ -44,7 +44,7 @@ def load_curv(G:nx.Graph, compute_curv:bool, curv_file:str):   ### Lai
         curv = sorted(edge_curvature, key=lambda x:x[1])
         curv_list = []
         for (x, y), cur in curv:
-            curv_list.append('%d %d %.6f'%(x, y, cur))
+            curv_list.append('{} {} {:.6f}'.format(x, y, cur))
         
         if curv_file is not None:
             with open(curv_file, 'w') as f:
@@ -208,7 +208,7 @@ def SBM_dir(sizes, probs, basename='origin'):
     n_node_each_block = sizes[0]
     p_intra = probs[0][0]
     p_inter = probs[0][1]
-    return os.path.join('../SBM_data/', '{:d}_{:d}_{:.2f}_{:.3f}/{}.gexf'.format(n_block, n_node_each_block, p_intra, p_inter, basename))
+    return os.path.join('SBM_data/', '{:d}_{:d}_{:.2f}_{:.3f}/{}.gexf'.format(n_block, n_node_each_block, p_intra, p_inter, basename))
 
 
 def load_SBM(normalization, porting_to_torch, data_path, data_param, save=False):
@@ -223,6 +223,7 @@ def load_SBM(normalization, porting_to_torch, data_path, data_param, save=False)
     labels = torch.tensor(list(blocks.values()))
     curv = load_curv(G, True, None)
     if save:
+        print(file_dir)
         check_dir(file_dir)
         nx.write_gexf(G, file_dir)
     adj = nx.adjacency_matrix(G)  # sparse matrix (2708, 2708)

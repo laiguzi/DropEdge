@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for i in $(seq 0.05 0.05 1.0)
+for i in $(seq 0.05 0.05 0.95)
 do
 echo $i
 python ./src/train_instance.py \
@@ -12,7 +12,7 @@ python ./src/train_instance.py \
     --nhiddenlayer 1 \
     --nbaseblocklayer 0 \
     --hidden 128 \
-    --epoch 400 \
+    --epoch 10 \
     --lr 0.01 \
     --weight_decay 0.001 \
     --early_stopping 400 \
